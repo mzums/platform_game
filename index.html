@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procedural Platformer</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Arial', sans-serif; }
+        canvas { display: block; }
+        #info {
+            position: absolute; top: 10px; left: 10px; background: rgba(0, 0, 0, 0.6);
+            color: white; padding: 10px; border-radius: 5px; font-size: 16px;
+            text-shadow: 1px 1px 2px black;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Coins: <span id="coins">0</span></div>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = 1800;
+        canvas.height = 900;
+
+        const player = { x: 50, y: 300, width: 30, height: 30, dx: 0, dy: 0, speed: 4, jumpPower: -15, gravity: 0.5, grounded: false };
+        let scrollX = 0, coinsCollected = 0, levelWidth = 2000;
+        let coinRotation = 0, cloudPulse = 1, pulseDir = 0.005;
+
+        const platforms = [], coins = [], hazards = [], movingPlatforms = [];
+        const goal = { x: levelWidth - 100, y: 150, width: 40, height: 50 };
+
+        const keys = {};
+        window.addEventListener("keydown", (e) => keys[e.code] = true);
+        window.addEventListener("keyup", (e) => keys[e.code] = false);
+
+        function createGradient(ctx, x1, y1, x2, y2, colors) {
+            const gradient = ctx.createLinearGradient(x1, y1, x2, y2);
+            colors.forEach((stop, index) => gradient.addColorStop(index/(colors.length-1), stop));
+            return gradient;
+        }
+
+        function generateLevel() {
+            platforms.push({ x: 0, y: 350, width: 300, height: 30 });
+            let x = 200;
+
+            for (let i = 0; i < 20; i++) {
+                let width = 100 + Math.random() * 100;
+                let y = 200 + Math.random() * 100;
+                platforms.push({ x, y, width, height: 30 });
+
+                if (Math.random() > 0.5) coins.push({ x: x + width / 2, y: y - 40, collected: false });
+                if (Math.random() > 0.7) hazards.push({ x: x + width / 3, y: y - 10, width: 30, height: 20 });
+
+                if (Math.random() > 0.8) movingPlatforms.push({ 
+                    x, y: y - 30, width: 80, height: 15, 
+                    dx: Math.random() > 0.5 ? 1 : -1 
+                });
+
+                x += width + 50;
+            }
+        }
+
+        function update() {
+            player.dx = (keys["ArrowRight"] ? player.speed : 0) - (keys["ArrowLeft"] ? player.speed : 0);
+            if (keys["ArrowUp"] && player.grounded) {
+                player.dy = player.jumpPower;
+                player.grounded = false;
+            }
+
+            player.dy += player.gravity;
+            player.x += player.dx;
+            player.y += player.dy;
+            player.grounded = false;
+
+            for (const platform of platforms.concat(movingPlatforms)) {
+                if (player.x < platform.x + platform.width && player.x + player.width > platform.x &&
+                    player.y + player.height > platform.y && player.y + player.height - player.dy <= platform.y) {
+                    player.y = platform.y - player.height;
+                    player.dy = 0;
+                    player.grounded = true;
+                }
+            }
+
+            for (const movingPlatform of movingPlatforms) {
+                movingPlatform.x += movingPlatform.dx;
+                if (movingPlatform.x < 50 || movingPlatform.x > levelWidth - 150) movingPlatform.dx *= -1;
+            }
+
+            for (const coin of coins) {
+                if (!coin.collected && player.x < coin.x + 15 && player.x + player.width > coin.x &&
+                    player.y < coin.y + 15 && player.y + player.height > coin.y) {
+                    coin.collected = true;
+                    coinsCollected++;
+                    document.getElementById("coins").innerText = coinsCollected;
+                }
+            }
+
+            for (const hazard of hazards) {
+                if (player.x < hazard.x + hazard.width && player.x + player.width > hazard.x &&
+                    player.y < hazard.y + hazard.height && player.y + player.height > hazard.y) {
+                    alert("You hit a hazard! Try again.");
+                    document.location.reload();
+                }
+            }
+
+            if (player.x > goal.x && player.x < goal.x + goal.width && player.y > goal.y && player.y < goal.y + goal.height) {
+                alert(`You reached the goal! Coins collected: ${coinsCollected}`);
+                document.location.reload();
+            }
+
+            if (player.y > canvas.height) {
+                alert("You fell! Try again.");
+                document.location.reload();
+            }
+
+            scrollX = player.x - canvas.width / 2;
+
+            coinRotation += 0.1;
+            cloudPulse += pulseDir;
+            if(cloudPulse > 1.1 || cloudPulse < 0.9) pulseDir *= -1;
+        }
+
+        function drawPlayer() {
+            const gradient = createGradient(ctx, player.x - scrollX, player.y, 
+                player.x - scrollX, player.y + player.height, ['#00f', '#009']);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(player.x - scrollX, player.y, player.width, player.height);
+            
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(player.x - scrollX + 8, player.y + 10, 4, 0, Math.PI * 2);
+            ctx.arc(player.x - scrollX + 22, player.y + 10, 4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(player.x - scrollX + 9, player.y + 11, 2, 0, Math.PI * 2);
+            ctx.arc(player.x - scrollX + 21, player.y + 11, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawPlatform(platform) {
+            ctx.fillStyle = createGradient(ctx, platform.x - scrollX, platform.y, 
+                platform.x - scrollX, platform.y + platform.height, ['#964B00', '#663300']);
+            ctx.fillRect(platform.x - scrollX, platform.y, platform.width, platform.height);
+            
+            ctx.fillStyle = createGradient(ctx, platform.x - scrollX, platform.y - 10, 
+                platform.x - scrollX, platform.y, ['#7CFC00', '#228B22']);
+            ctx.beginPath();
+            ctx.roundRect(platform.x - scrollX, platform.y - 10, platform.width, 10, 5);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#5B8C2A';
+            for(let i = platform.x - scrollX; i < platform.x + platform.width - scrollX; i += 15) {
+                ctx.beginPath();
+                ctx.arc(i + Math.random() * 10, platform.y - 10, 8, Math.PI, 0);
+                ctx.stroke();
+            }
+        }
+
+        function drawMovingPlatform(platform) {
+            ctx.fillStyle = createGradient(ctx, platform.x - scrollX, platform.y, 
+                platform.x - scrollX + platform.width, platform.y, ['#808080', '#A9A9A9']);
+            ctx.fillRect(platform.x - scrollX, platform.y, platform.width, platform.height);
+            
+            ctx.strokeStyle = '#666';
+            for(let i = 5; i < platform.width; i += 10) {
+                ctx.beginPath();
+                ctx.moveTo(platform.x - scrollX + i, platform.y + 2);
+                ctx.lineTo(platform.x - scrollX + i, platform.y + platform.height - 2);
+                ctx.stroke();
+            }
+        }
+
+        function drawCoin(coin) {
+            if (coin.collected) return;
+            
+            ctx.save();
+            ctx.translate(coin.x - scrollX, coin.y);
+            ctx.rotate(coinRotation);
+            
+            const gradient = createGradient(ctx, -10, -10, 10, 10, ['#FFD700', '#FFA500']);
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 10, 14, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.beginPath();
+            ctx.ellipse(-3, -5, 3, 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+
+        function drawHazard(hazard) {
+            ctx.fillStyle = createGradient(ctx, hazard.x - scrollX, hazard.y, 
+                hazard.x - scrollX, hazard.y + hazard.height, ['#FF4444', '#880000']);
+            
+            ctx.beginPath();
+            ctx.moveTo(hazard.x - scrollX + hazard.width/2, hazard.y);
+            ctx.lineTo(hazard.x - scrollX, hazard.y + hazard.height);
+            ctx.lineTo(hazard.x - scrollX + hazard.width, hazard.y + hazard.height);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.strokeStyle = '#440000';
+            ctx.stroke();
+        }
+
+        function drawGoal() {
+            ctx.fillStyle = createGradient(ctx, goal.x - scrollX, goal.y, 
+                goal.x - scrollX, goal.y + goal.height, ['#FF69B4', '#9400D3']);
+            ctx.fillRect(goal.x - scrollX, goal.y, 10, goal.height);
+            
+            const flagGradient = createGradient(ctx, goal.x - scrollX + 10, goal.y, 
+                goal.x - scrollX + 40, goal.y, ['#FF1493', '#4B0082']);
+            ctx.fillStyle = flagGradient;
+            ctx.beginPath();
+            ctx.moveTo(goal.x - scrollX + 10, goal.y);
+            ctx.lineTo(goal.x - scrollX + 40, goal.y + 15);
+            ctx.lineTo(goal.x - scrollX + 10, goal.y + 30);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawBackground() {
+            const skyGradient = createGradient(ctx, 0, 0, 0, canvas.height, ['#87CEEB', '#4682B4']);
+            ctx.fillStyle = skyGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            for(let i = 0; i < 3; i++) {
+                const x = (scrollX * 0.2 + i * 900) % (levelWidth + 1800) - 800;
+                const y = 50 + Math.sin(scrollX * 0.01 + i) * 20;
+                ctx.beginPath();
+                ctx.ellipse(x, y, 40 * cloudPulse, 30 * cloudPulse, 0, 0, Math.PI * 2);
+                ctx.ellipse(x + 40, y + 10, 35 * cloudPulse, 25 * cloudPulse, 0, 0, Math.PI * 2);
+                ctx.ellipse(x - 30, y + 5, 25 * cloudPulse, 20 * cloudPulse, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.fillStyle = 'rgba(50, 150, 50, 0.3)';
+            for(let i = 0; i < 5; i++) {
+                ctx.beginPath();
+                const hillX = (scrollX * 0.5 + i * 600) % (levelWidth + 1200) - 600;
+                ctx.arc(hillX, 400, 300, Math.PI, 0);
+                ctx.fill();
+            }
+        }
+
+        function draw() {
+            drawBackground();
+            
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+            ctx.shadowBlur = 5;
+            
+            for (const platform of platforms) drawPlatform(platform);
+            for (const movingPlatform of movingPlatforms) drawMovingPlatform(movingPlatform);
+            for (const coin of coins) drawCoin(coin);
+            for (const hazard of hazards) drawHazard(hazard);
+            
+            ctx.shadowBlur = 0;
+            drawGoal();
+            drawPlayer();
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        generateLevel();
+        gameLoop();
+    </script>
+</body>
+</html>
